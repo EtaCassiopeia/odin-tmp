@@ -1,4 +1,5 @@
 # Scala Schema Compatibility Check System
+# Scala Schema Compatibility Check System
 
 A build-time schema compatibility checking system for Scala projects that prevents breaking changes in domain models used for JSON serialization/deserialization (using zio-schema and zio-json) for databases and APIs.
 

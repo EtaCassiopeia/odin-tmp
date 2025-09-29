@@ -21,6 +21,7 @@ object SchemaCompatPlugin extends AutoPlugin {
     val schemaCompatReportLevel = settingKey[String]("Report level: summary/detailed (default: detailed)")
     val schemaCompatTransitive = settingKey[Boolean]("Check transitive types recursively (default: true)")
     val schemaCompatReportFile = settingKey[Option[File]]("Optional file to write compatibility report")
+    val schemaCompatOnCompile = settingKey[Boolean]("Run schema compatibility check on compile (default: false)")
     
     val schemaCompatCheck = taskKey[Unit]("Check schema compatibility against previous versions")
     val schemaCompatFetchPrevious = taskKey[Seq[File]]("Fetch previous artifact versions")
@@ -37,6 +38,7 @@ object SchemaCompatPlugin extends AutoPlugin {
     schemaCompatReportLevel := "detailed",
     schemaCompatTransitive := true,
     schemaCompatReportFile := None,
+    schemaCompatOnCompile := false,
     
     // Fetch previous versions task
     schemaCompatFetchPrevious := {
@@ -87,8 +89,9 @@ object SchemaCompatPlugin extends AutoPlugin {
       
       log.info("Starting schema compatibility check...")
       
-      // Get current JAR (this would be the one being built)
-      val currentJar = (Compile / packageBin).value
+      // Get compiled classes directory instead of JAR to avoid cycle
+      val compiledClasses = (Compile / classDirectory).value
+      log.info(s"Using compiled classes from: ${compiledClasses.getAbsolutePath}")
       
       // Get previous versions
       val previousJars = schemaCompatFetchPrevious.value
@@ -97,7 +100,7 @@ object SchemaCompatPlugin extends AutoPlugin {
         log.info("No previous versions to check against")
       } else {
         val issues = CompatibilityChecker.checkCompatibility(
-          currentJar,
+          compiledClasses,
           previousJars,
           mode,
           log
@@ -124,20 +127,11 @@ object SchemaCompatPlugin extends AutoPlugin {
       }
     },
     
-    // Hook into compile to run compatibility check
-    Compile / compile := ((Compile / compile) dependsOn schemaCompatCheck).value,
+    // Hook into publish tasks to run compatibility check after packaging
+    publish := (publish dependsOn schemaCompatCheck).value,
+    publishLocal := (publishLocal dependsOn schemaCompatCheck).value
     
-    // Add schema metadata to JAR manifest
-    Compile / packageBin / packageOptions += {
-      val log = streams.value.log
-      log.info("Adding schema compatibility metadata to JAR manifest...")
-      
-      // This would collect schemas from compiled classes
-      // For now, we'll add a placeholder
-      Package.ManifestAttributes(
-        "Schema-Compat-Version" -> version.value,
-        "Schema-Compat-Mode" -> schemaCompatMode.value
-      )
-    }
+    // Note: JAR manifest metadata has been removed to prevent cyclic dependencies
+    // If needed, this can be added to a separate task that doesn't depend on streams
   )
 }

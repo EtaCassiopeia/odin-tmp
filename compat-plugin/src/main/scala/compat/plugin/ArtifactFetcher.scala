@@ -1,12 +1,8 @@
 package compat.plugin
 
-import coursier._
-import coursier.cache.FileCache
-import coursier.util.Task
-import java.io.File
+import java.io.{File, FileInputStream, FileOutputStream}
+import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 import scala.util.{Try, Success, Failure}
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
 
 object ArtifactFetcher {
   
@@ -19,26 +15,33 @@ object ArtifactFetcher {
   ): Try[File] = {
     
     Try {
-      val cache = FileCache[Task]().withLocation(new File(targetDir, "cache"))
-      val repositories = Seq(coursier.Repositories.central) ++ 
-        (if (repositoryUrl != "https://repo1.maven.org/maven2") Seq(coursier.MavenRepository(repositoryUrl)) else Seq.empty)
-      
-      val dependency = coursier.Dependency(
-        coursier.Module(coursier.core.Organization(organization), coursier.ModuleName(name)),
-        version
-      )
-      
-      val fetch = Fetch(cache)
-        .withRepositories(repositories)
-        .withDependencies(Seq(dependency))
-      
-      // Simplified artifact fetching - in real implementation would use coursier properly
       val targetFile = new File(targetDir, s"$name-$version.jar")
       
-      // For demo purposes, create an empty jar file to simulate download
       if (!targetFile.exists()) {
         targetFile.getParentFile.mkdirs()
-        targetFile.createNewFile()
+        
+        // First try to find in local Ivy cache
+        val ivyHome = System.getProperty("user.home") + "/.ivy2/local"
+        val ivyPath = s"$ivyHome/$organization/$name/$version/jars/$name.jar"
+        val ivyFile = new File(ivyPath)
+        
+        if (ivyFile.exists() && ivyFile.length() > 0) {
+          // Copy from Ivy cache
+          Files.copy(ivyFile.toPath, targetFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+          println(s"Copied from Ivy cache: ${ivyFile.getAbsolutePath} -> ${targetFile.getAbsolutePath} (${ivyFile.length()} bytes)")
+        } else {
+          // Try Maven local repository
+          val m2Home = System.getProperty("user.home") + "/.m2/repository"
+          val m2Path = s"$m2Home/${organization.replace('.', '/')}/$name/$version/$name-$version.jar"
+          val m2File = new File(m2Path)
+          
+          if (m2File.exists() && m2File.length() > 0) {
+            Files.copy(m2File.toPath, targetFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+            println(s"Copied from Maven local: ${m2File.getAbsolutePath} -> ${targetFile.getAbsolutePath} (${m2File.length()} bytes)")
+          } else {
+            throw new RuntimeException(s"Could not find artifact $organization:$name:$version in local caches. Tried: $ivyPath, $m2Path")
+          }
+        }
       }
       
       targetFile

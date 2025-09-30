@@ -86,14 +86,40 @@ object SchemaCompatPlugin extends AutoPlugin {
     // Schema generation task  
     schemaCompatGenerate := {
       val log = streams.value.log
-      val classDir = (Compile / classDirectory).value
-      val classpath = (Compile / fullClasspath).value
+      val targetDir = target.value
       
-      log.info("Generating schemas from @CompatCheck annotated classes...")
+      log.info("Collecting schemas from compilation output...")
       
-      // For demo purposes, create schemas for our known models
-      // In production, this would use reflection/classpath scanning to find @CompatCheck classes
-      generateSchemasForDemo(log)
+      // Check for schema files written during compilation
+      val schemaDir = targetDir / "compat-schemas"
+      val schemasFromFiles = if (schemaDir.exists() && schemaDir.isDirectory()) {
+        val schemaFiles = schemaDir.listFiles().filter(_.getName.endsWith(".json"))
+        val schemas = schemaFiles.map { file =>
+          val typeName = file.getName.stripSuffix(".json").replace("_", ".")
+          val avroJson = scala.io.Source.fromFile(file).mkString.trim
+          (typeName, avroJson)
+        }.toMap
+        
+        if (schemas.nonEmpty) {
+          log.info(s"Found ${schemas.size} schemas from compilation:")
+          schemas.foreach { case (typeName, _) =>
+            log.info(s"  - $typeName")
+          }
+        }
+        schemas
+      } else {
+        Map.empty[String, String]
+      }
+      
+      // If no schemas found from files, fall back to reflection-based discovery
+      if (schemasFromFiles.nonEmpty) {
+        schemasFromFiles
+      } else {
+        log.info("No schema files found from compilation, falling back to runtime discovery...")
+        val classDir = (Compile / classDirectory).value
+        val classpath = (Compile / fullClasspath).value
+        SchemaDiscovery.discoverSchemas(classDir, classpath.files, log)
+      }
     },
     
     // Main compatibility check task
@@ -169,47 +195,6 @@ object SchemaCompatPlugin extends AutoPlugin {
     }
   )
   
-  // Helper function to generate schemas based on the actual source code  
-  private def generateSchemasForDemo(log: sbt.util.Logger): Map[String, String] = {
-    log.info("Generating schemas from current model definitions...")
-    
-    // This would normally scan for @CompatCheck classes, but for the demo we'll
-    // generate schemas that reflect the actual current state of our models
-    
-    // Check if we have the old version (name field) or new version (fullName field)
-    // We'll determine this by looking at the source file content if possible
-    // For now, we'll generate the current version schema (with breaking changes)
-    
-    val userSchemaJson = """
-    {"type":"record","name":"User","namespace":"com.example.models","fields":[
-      {"name":"id","type":"string"},
-      {"name":"fullName","type":"string"},
-      {"name":"email","type":"string"},
-      {"name":"age","type":["null","int"],"default":null},
-      {"name":"status","type":"string"},
-      {"name":"createdAt","type":"string"},
-      {"name":"address","type":"string"}
-    ]}
-    """.trim
-    
-    val orderSchemaJson = """
-    {"type":"record","name":"Order","namespace":"com.example.models","fields":[
-      {"name":"id","type":"string"},
-      {"name":"userId","type":"string"},
-      {"name":"items","type":{"type":"array","items":"string"}},
-      {"name":"totalAmount","type":"string"},
-      {"name":"status","type":"string"},
-      {"name":"createdAt","type":"string"}
-    ]}
-    """.trim
-    
-    log.info("Generated schemas for User and Order models")
-    
-    Map(
-      "com.example.models.User" -> userSchemaJson,
-      "com.example.models.Order" -> orderSchemaJson
-    )
-  }
   
   // Helper function to encode schema entries
   private def encodeSchemaEntry(typeName: String, avroJson: String): String = {

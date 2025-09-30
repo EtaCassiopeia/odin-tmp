@@ -46,22 +46,9 @@ lazy val `compat-plugin` = project
     scriptedBufferLog := false
   )
 
-lazy val demo = project
-  .in(file("demo"))
-  .dependsOn(core)
-  .settings(
-    name := "schema-compat-demo",
-    scalaVersion := "3.3.3",
-    commonSettings,
-    libraryDependencies ++= Seq(
-      "dev.zio" %% "zio" % "2.0.19",
-      "eu.timepit" %% "refined" % "0.11.0"
-    )
-  )
-
 lazy val root = project
   .in(file("."))
-  .aggregate(core, `compat-plugin`, demo)
+  .aggregate(core, `compat-plugin`)
   .settings(
     name := "scala-compat-check-system",
     publish / skip := true

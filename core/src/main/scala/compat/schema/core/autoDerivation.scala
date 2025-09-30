@@ -35,15 +35,37 @@ object AutoDerivation:
           case _ => '{ "full" }
     }.getOrElse('{ "full" })
     
+    // Store schema information for compile-time collection
+    val typeName = tpe.show
+    
     '{
       val baseSchema = DeriveSchema.gen[T]
       CompatSchema.generateAvroSchema(baseSchema) match
         case Left(error) => 
-          throw new RuntimeException(s"Failed to generate Avro schema for ${${Expr(tpe.show)}}: $error")
+          throw new RuntimeException(s"Failed to generate Avro schema for ${${Expr(typeName)}}: $error")
         case Right(avroSchema) =>
           // Add metadata
           avroSchema.addProp("compatMode", $compatModeExpr)
-          avroSchema.addProp("scalaType", ${Expr(tpe.show)})
+          avroSchema.addProp("scalaType", ${Expr(typeName)})
+          
+          // Store schema for compile-time collection (if registry is available)
+          try {
+            SchemaRegistry.register(${Expr(typeName)}, avroSchema.toString(true))
+          } catch {
+            case _: Throwable => // Registry not available during compilation, ignore
+          }
+          
+          // Write schema to file for SBT plugin to read
+          try {
+            val outputDir = new java.io.File("target/compat-schemas")
+            outputDir.mkdirs()
+            val schemaFile = new java.io.File(outputDir, s"${${Expr(typeName.replace(".", "_"))}}.json")
+            val writer = new java.io.PrintWriter(schemaFile)
+            writer.println(avroSchema.toString(true))
+            writer.close()
+          } catch {
+            case _: Throwable => // File writing failed, ignore
+          }
           
           CompatSchema(
             baseSchema,
@@ -52,7 +74,7 @@ object AutoDerivation:
             (previous, mode) => List.empty, // Simplified for demo - would implement proper checking
             Map(
               "compatMode" -> $compatModeExpr,
-              "scalaType" -> ${Expr(tpe.show)}
+              "scalaType" -> ${Expr(typeName)}
             )
           )
     }

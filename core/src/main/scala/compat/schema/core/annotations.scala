@@ -1,8 +1,11 @@
 package compat.schema.core
 
 import scala.annotation.StaticAnnotation
+import java.lang.annotation.{Retention, RetentionPolicy, Target, ElementType}
 
 /** Marks a type for schema compatibility checking */
+@Retention(RetentionPolicy.RUNTIME)
+@Target(Array(ElementType.TYPE))
 class CompatCheck extends StaticAnnotation
 
 /** Override global compatibility mode for this specific type */

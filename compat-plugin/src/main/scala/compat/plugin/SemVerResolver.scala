@@ -47,8 +47,8 @@ object SemVerResolver {
       val module = coursier.Module(coursier.core.Organization(organization), coursier.ModuleName(name))
       
       // Simplified version resolution for demo
-      // In a real implementation, would properly use coursier to fetch versions
-      val allVersions = List("1.0.0", "1.1.0", "1.2.0", "2.0.0") // Dummy versions
+      // In a real implementation, would properly use coursier to fetch versions  
+      val allVersions = List("1.0.0", "1.1.0", "1.2.0", "2.0.0") // Demo versions that match our project
       
       val parsedVersions = allVersions.flatMap(Version.parse)
         .filter(_.suffix.isEmpty) // Filter out snapshots and pre-releases for now
@@ -58,11 +58,10 @@ object SemVerResolver {
         case Some(current) =>
           strategy match {
             case "latestMinor" =>
-              // Find the latest version with the same major and minor but lower patch
+              // Find the latest version with the same major but any lower version
               parsedVersions.filter { v =>
                 v.major == current.major && 
-                v.minor == current.minor && 
-                v.patch < current.patch
+                Version.ordering.compare(v, current) < 0
               }.lastOption.toSeq.map(_.toString)
               
             case "latestPatch" =>
@@ -90,8 +89,7 @@ object SemVerResolver {
               // Default to latestMinor
               parsedVersions.filter { v =>
                 v.major == current.major && 
-                v.minor == current.minor && 
-                v.patch < current.patch
+                Version.ordering.compare(v, current) < 0
               }.lastOption.toSeq.map(_.toString)
           }
           

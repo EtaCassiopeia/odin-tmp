@@ -50,7 +50,7 @@ object AutoDerivation:
           
           // Store schema for compile-time collection (if registry is available)
           try {
-            SchemaRegistry.register(${Expr(typeName)}, avroSchema.toString(true))
+            SchemaRegistry.register(${Expr(typeName)}, avroSchema.toString())
           } catch {
             case _: Throwable => // Registry not available during compilation, ignore
           }
@@ -61,7 +61,7 @@ object AutoDerivation:
             outputDir.mkdirs()
             val schemaFile = new java.io.File(outputDir, s"${${Expr(typeName.replace(".", "_"))}}.json")
             val writer = new java.io.PrintWriter(schemaFile)
-            writer.println(avroSchema.toString(true))
+            writer.println(avroSchema.toString())
             writer.close()
           } catch {
             case _: Throwable => // File writing failed, ignore

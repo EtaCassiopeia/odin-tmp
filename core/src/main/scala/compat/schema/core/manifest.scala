@@ -26,7 +26,7 @@ object ManifestStorage:
     val entries = schemas.toList.zipWithIndex.map { case ((typeName, compatSchema), index) =>
       val entry = StoredSchema(
         typeName = typeName,
-        avroJson = compatSchema.avro.toString(true),
+        avroJson = compatSchema.avro.toString(),
         metadata = compatSchema.metadata
       )
       s"$SCHEMA_PREFIX$index" -> encodeEntry(entry)
